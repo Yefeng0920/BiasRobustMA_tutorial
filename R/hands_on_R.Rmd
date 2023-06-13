@@ -1,0 +1,301 @@
+---
+title: "A two-step approach for robust point and variance estimation for meta-analyses with selective reporting and dependent effect sizes"
+#subtitle: "Hands-on tutorial"
+author: "Yefeng Yang, Malgorzata Lagisz & Shinichi Nakagawa"
+output:
+ rmdformats::downcute:
+    code_folding: show
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    downcute_theme: "chaos"  
+bibliography: "references.bib"
+csl: "plos-biology.csl"
+link-citations: yes  
+---
+
+# Instruction
+
+This online material serves as a supplement to our methodological paper, aiming for providing a step-by-step tutorial.
+
+>  Yefeng Yang, Malgorzata Lagisz, Shinichi Nakagawa. A two-step approach for robust point and variance estimation for meta-analyses with selective reporting and dependent effect sizes. Preprint. 2023 (XXXX). 
+
+A glimpse: 
+
+Meta-analysis produces a quantitative synthesis of evidence-based knowledge, shaping not only research trends but also policymaking. However, meta-analytic modelling struggles with addressing two statistical issues concurrently: statistical dependence and selective reporting (e.g., publication bias, *P*-hacking). Here, we propose a two-step procedure to tackle these challenges. First, we employ bias-robust weighting schemes under the generalized least square estimator to obtain less biased mean effect size estimates by considering the mechanisms of selective reporting. Second, we utilize cluster-robust variance estimation to account for statistical dependence and reduce bias in estimating standard errors, ensuring valid statistical inference. By re-analysing 448 published meta-analyses, we show our approach is effective in mitigating bias when estimating mean effect sizes and standard errors. To assist adoption of our approach, we provide a step-by-step tutorial website. Complementing the current practice with the proposed method facilitates robust analysis and transition to a more pluralistic approach in the quantitative synthesis.
+
+# Reach out
+
+For queries, mistakes, or bug, please contact corresponding authors:
+
+- Dr. Yefeng Yang
+
+Evolution & Ecology Research Centre, EERC
+School of Biological, Earth and Environmental Sciences, BEES
+The University of New South Wales, Sydney, Australia
+
+Email: yefeng.yang1@unsw.edu.au
+
+- Professor Shinichi Nakagawa, PhD, FRSN
+
+Evolution & Ecology Research Centre, EERC
+School of Biological, Earth and Environmental Sciences, BEES
+The University of New South Wales, Sydney, Australia
+
+Email: s.nakagawa@unsw.edu.au
+
+# Setup `R`
+
+This tutorial is based on `R` statistical software and existing R packages.
+
+If you do not have it on your computer, first install `R` ([download](https://cran.r-project.org/)). 
+
+We recommend also downloading a popular IDE for coding with `R` - `posit` (i.e., `RStudio`), which is developed by a company named posit ([download](https://posit.co/products/open-source/rstudio/)). 
+
+After installing `R` and `posit`, next step is to install 7 packages that contain functions for implementing our proposed method. If the packages are archived in CRAN, use `install.packages()` to install them. 
+
+For packages `metafor`, `clubSandwich`,`ggplot2`, `readxl`, `dplyr`， and `here` that are archived in CRAN, use `install.packages("package name")`in the console (bottom left pane of `posit`) to install them. For example, to install `metafor`, you will need to run `install.packages("metafor")`. For package `orchaRd` that is archived in GitHub, execute `devtools::install_github("repository name/package name")`. For example, to install `orchaRd`, you will need to execute `devtools::install_github("daniel1noble/orchaRd", force = TRUE)`. 
+
+```{r package, echo = FALSE, warning=FALSE}
+# Tidy
+# rm(list=ls())
+# graphics.off()
+# html outputs: https://github.com/juba/rmdformats
+# Preparing workspace
+knitr::opts_chunk$set(echo = TRUE, include = TRUE)
+library(knitr) # knit markdown
+library(rmdformats)
+library(pander)
+# Loading packages
+pacman::p_load(readr, 
+               metafor, 
+               dplyr, 
+               clubSandwich,
+               #orchaRd, # forest-like plot
+               here,
+               ggplot2
+)
+# load custom function
+source(here("function","custom_function.R")) # will remove this once orchard package is ready
+```
+
+
+# Dataset
+
+In the tutorial, we randomly selected a published meta-analysis @bird2019herbivorous that showed evidence of publication bias. This example meta-analysis examined the effect of herbivore interaction on fitness based on 179 species, 167 studies, and 1640 effect sizes 55. To address the statistical dependence among effect sizes (with 10 effect sizes per study), the original publication employed Bayesian multilevel meta-analytic modelling with phylogenetic relatedness, study, and observation identities as random effects. 
+
+First, let's load data and have a glance of data.
+
+`study` denotes unique identity of each primary study included in this meta-analysis.
+
+`eff.size` denotes effect size estimate. This meta-analysis utilised standardised mean difference (SMD) as effect size measure.
+
+`var.eff.size` denotes corresponding sampling variance estimate.
+
+```{r data, warning=FALSE}
+# load data
+bird.et.al.2019.ecoletts <- read.csv(here("data","bird.et.al.2019.ecoletts.csv"))
+
+# only keep relevant variables
+dat <- bird.et.al.2019.ecoletts %>% select(study, eff.size, var.eff.size)
+
+# have a look at data
+head(dat)
+```
+
+# Data check
+
+Before formally modeling the data, it is recommended to visually inspect it as part of good data science practice. Visual inspection allows for an initial examination of the data and helps identify any potential issues or patterns. So, let's do some basic visual inspection of data. 
+
+The distribution of effect size measures:
+
+```{r histogram,fig.cap="Figure S1. Histogram of effect size measures in the example dataset", warning=FALSE}
+hist(dat$eff.size, breaks = 50, main = "Effect size distribution", xlab = "Effect size estimate (SMD)")
+```
+
+There appears to be outlier data points in the dataset.
+
+To validate this observation, we can generate a visual representation by plotting the relationship between the effect size estimate and its corresponding precision:
+
+```{r funnel, fig.cap="Figure S2. The histogram of effect size measures in the example dataset", warning=FALSE}
+plot(dat$eff.size, 1/sqrt(dat$var.eff.size), main = "Effect size vs precision", xlab = "Effect size estimate (SMD)", ylab = "Precision (1/SE)")
+```
+
+Upon closer examination, it is apparent that the dataset contains effect size estimates that exhibit extreme values, either extremely large or small. In order to address this issue, we can establish an arbitrary threshold, such as [-20, 20], which serves as a criterion for identifying and excluding potential outliers. Then, we revisit the data again:
+
+```{r outliner1, fig.cap="Figure S3. The histogram of effect size measures after deleting potential outliners", warning=FALSE}
+# exclude effect size > 20 & < -20
+dat <- dat %>% filter(eff.size < 20 & eff.size > -20)
+
+# check again
+hist(dat$eff.size, breaks = 50, main = "Effect size distribution", xlab = "Effect size estimate (SMD)")
+```
+
+```{r outliner2, fig.cap="Figure S4. Histogram of effect size measures after deleting potential outliners", warning=FALSE}
+plot(dat$eff.size, 1/sqrt(dat$var.eff.size), main = "Effect size vs precision", xlab = "Effect size estimate (SMD)", ylab = "Precision (1/SE)")
+
+```
+
+Based on Figures S4 and S5, it appears that after applying the predefined threshold to exclude potential outliers, the data exhibits a more normal distribution. It is important to note that this tutorial does not specifically focus on data cleaning techniques (we acknowledge we are also not the expert in this aspect). Therefore, we will not delve into this aspect and proceed with our demonstration after the above simple cleaning.
+
+# Evidence of publication bias
+
+In line with the publication bias test conducted in the original publication @bird2019herbivorous, our re-analysis also confirmed the existence of publication bias. We used the recently developed multilevel version of Egger's test to detect publication bias @nakagawa2022methods.
+
+```{r pubbias, fig.cap="Figure S5. The positive relaitonship between effect size estimate and its standard error indicates the evidence of publicaiton bias", warning=FALSE}
+## account for non-independence to avoid false positive when detecting publication bias
+dat$obs <- 1:nrow(dat)
+dat$se.eff.size <- sqrt(dat$var.eff.size)
+mod_pb <- rma.mv(yi = eff.size, V = var.eff.size, mods = ~ se.eff.size, random = list(~ 1 | study, ~ 1 | obs), method = "REML", test = "t", dfs = "contain", data = dat, sparse = TRUE, control=list(optimizer="nlminb", rel.tol=1e-8, iter.max=1000))
+
+summary(mod_pb)
+
+# visualize publication bias
+bubble_plot(mod_pb, mod = "se.eff.size", legend.pos = "top.left", group = "study") + 
+  labs(x = "Standard error of SMD", y = "Standardized mean difference (SMD)")
+```
+
+The output of the model shows strong statistical evidence of publication bias, or more precisely, small study effects. This is also confirmed by Figure S6. It is worth noting, however, that as we state in the main text, we assume, as do other researchers, that the small study effect is a typical form of selective reporting or publication bias. But whether this is the case, only God knows.
+
+# Benchmark method: multilevel model
+
+The multilevel meta-analysis (MLMA) model has gained popularity as a standard method for handling dependent effect sizes in various fields. Its flexible random-effects structure has made it a benchmark approach in many disciplines. We have published Several guideline papers recommending the MLMA model as the default method for conducting meta-analyses, each with a specific methodological focus tailored to different fields, such as preclinic or animal sciences @yang2022advanced, environmental sciences @nakagawa2023quantitative,  experimental biology @noble2022meta, ecology and evolution @nakagawa2012methodological, and biology in general @nakagawa2017meta.
+
+However, it is important to note that the MLMA model exhibits systematic errors in estimating the mean effect size when selective reporting is present. This can be observed in Figures 2 to 5 in the main text of our study. Similar to the traditional random-effects model, the MLMA model tends to assign roughly equal weights to studies in the presence of high heterogeneity, which can lead to biased estimates when publication bias is present.
+
+A MLMA model can be fitted with:
+
+```{r MLMA, warning=FALSE}
+# fit a MLMA model
+mod_MLMA <- rma.mv(yi = eff.size, V = var.eff.size, random = list(~ 1 | study, ~ 1 | obs), method = "REML", test = "t", dfs = "contain", data = dat, sparse = TRUE, control=list(optimizer="nlminb", rel.tol=1e-8, iter.max=1000))
+summary(mod_MLMA)
+```
+
+For the above output, we see a statistically significant interaction between herbivores without correcting for publication bias ($\hat{\beta}$ = `r round(mod_MLMA$b[1],3)`, ${SE(\hat{\beta})}$ = `r round(mod_MLMA$se[1],3)`, 95% CI = [`r round(mod_MLMA$ci.lb[1],3)`, `r round(mod_MLMA$ci.ub[1],3)`], $t_{166}$ = `r round(mod_MLMA$zval[1],3)`, p-value < 0.001). This observation is aligned with the original study @bird2019herbivorous, albeit with slight difference in the magnitude of estimate.
+
+# Two-step approach {.tabset} 
+
+In contrast, our proposed two-step approach address this issue by employing bias-robust models within the cluster-robust variance estimation (CRVE) framework. 
+
+## Step one - fit a bias-robust model
+
+In the first step, we employ bias-robust models with bias-robust weighting schemes to obtain less biased mean effect size estimates $\hat{\beta}$. Specifically, we incorporate a within-study variance-covariance matrix into the fixed-effect model (FE + VCV) and utilize the unrestricted weighted least square (UWLS) model. The bias-robust weighting schemes counteracted selective reporting by considering the underlying mechanisms that contribute to it. For example, the inverse VCV weighting scheme assigned smaller weights to studies with low precision and large effects, thereby penalizing studies that appear to be “selectively reported”. 
+
+To implement step one, you will need to use two functions, `impute_covariance_matrix()` from package `clubSandwich` @pustejovsky2022meta and `rma.mv` from package `metafor` @viechtbauer2007confidence. We assume a constant sampling correlation of 0.5 (see a sensitivity analysis at the end of this tutorial). Note that `impute_covariance_matrix()` also can be replaced by `vcalc()` in `metafor`.
+
+Let's show the implementation of step one:
+
+```{r step one, warning=FALSE}
+# step one - fit a multivariate FE model
+## assuming that the effect sizes within studies are correlated with rho=0.5
+VCV <- impute_covariance_matrix(vi = dat$var.eff.size, cluster = dat$study, r = 0.5)
+mod_MLFE <- rma.mv(yi = eff.size, V = VCV, method = "REML", test = "t", dfs = "contain", data = dat)
+
+summary(mod_MLFE)
+```
+
+The model output indicates that the interaction between herbivores turn into a minimal magnitude ($\hat{\beta}$ = `r round(mod_MLFE$b[1],3)`, ${SE(\hat{\beta})}$ = `r round(mod_MLFE$se[1],3)`, 95% CI = [`r round(mod_MLFE$ci.lb[1],3)`, `r round(mod_MLFE$ci.ub[1],3)`], $t_{166}$ = `r round(mod_MLFE$zval[1],3)`, p-value < 0.001), albeit it is still statistically significant. But as we will show that this statistical significance arises from the non-independence among effect sizes. In this example dataset, each primary study contributes 10 effect size estimates. The between-study difference accounts for `r 100*round(mod_MLMA$sigma2[1]/sum(mod_MLMA$sigma2),2)`% variation in effect sizes. 
+
+## Step two - estimate robust error
+
+Moving to the second step, we treated the fitted bias-robust models as the “working” model within the CRVE framework. This step helped to mitigate potential biases in the standard error estimates ${SE(\hat{\beta})}$ that could arise from violating assumption of data independence in FE + VCV and UWLS (i.e., model misspecification). By employing the CRVE, we obtained robust standard error estimates ${SE(\hat{\beta})}$ that ensured the validity of subsequent statistical inference, including null-hypothesis tests and CI construction. In this step, we will be using `robust()` from in `metafor` @viechtbauer2007confidence. Alternatively, you can use `coef_test()` in `clubSandwich` @pustejovsky2022meta.
+
+The robust standard error estimate ${SE(\hat{\beta})}$ and subsequent statistical inferences can be done with:
+
+```{r step two, warning=FALSE}
+# apply CRVE to multivariate FE model
+mod_MLFE_RVE <- robust(mod_MLFE, cluster = study, clubSandwich = TRUE)
+summary(mod_MLFE_RVE)
+```
+
+The corresponding ${SE(\hat{\beta})}$ now is `r round(mod_MLFE_RVE$se[1],3)`, which is more closer to that from the standard method (MLMA model). The null-hypothesis test shows that the interaction between herbivores is not statistically significant (p-value = `r round(mod_MLFE_RVE$pval[1],3)`). The 95% CI becomes wider [`r round(mod_MLFE_RVE$ci.lb[1],3)`, `r round(mod_MLFE_RVE$ci.ub[1],3)`], which means it is more likely to cover the true effect and less likely to have a high false positive. Another interesting point to spot is that the degrees of freedom was decreased from `r mod_MLFE$ddf[1]` to `r round(mod_MLFE_RVE$ddf[1],0)`. Using a more familiar language to explain this is that the dataset has the issue of pseudo-replication. 
+
+
+# Visualization
+
+We also develop a help function integrated into a meta-analysis visualization package `orchaRd` @nakagawa2021orchard to visualize the results of the proposed method along with those from the standard method. The plot includes essential elements such as the point estimate of the mean effect size, 95% CI, 95% prediction interval, as well as information on precision, observational and study-level sample sizes, allowing for a visual assessment of the robustness of the meta-analytic findings and facilitating transparent reporting.
+
+This figure can be made with `orchard_plot()` function:
+
+```{r orchard, fig.cap="Figure S6. Orchard plot showing the results from the standard meta-analytic modeeling (multilevel meta-analysis) and the proposed two-step appraoch", warning=FALSE}
+# extract estimates from the fitted model
+mod_tab <- data.frame(name = "Intrcpt", estimate = mod_MLFE_RVE$b[1], lowerCL = mod_MLFE_RVE$ci.lb, upperCL = mod_MLFE_RVE$ci.ub, y = min(dat$eff.size))
+
+orchard_plot(mod_MLMA, mod = "1", group = "study", xlab = "Standardised mean difference (SMD)") + 
+  scale_x_discrete(labels = "Mean effect estimate") + 
+  ylim(-4,4) + 
+  #geom_hline(yintercept = mod_MLFE_RVE$b[1], linetype = 1, colour = "red", alpha = 0.3) +
+  geom_hline(yintercept = mod_MLFE_RVE$ci.lb[1], linetype = 2, colour = "red", alpha = 0.5) + 
+  geom_hline(yintercept = mod_MLFE_RVE$ci.ub, linetype = 2, colour = "red", alpha = 0.5) +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(size = 14, color = "black"),
+        axis.title.x = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(size = 14, color = "black"))
+  #annotate("errorbar", x = mod_tab$name, y = 2, ymin = mod_tab$lowerCL, ymax = mod_tab$upperCL, color = "red", width = 0.05) +
+```
+
+
+# Additional analysis
+
+Here, we show how to perform a sensitivity analysis to examine the extent to which the mean effect is sensitive to the assumption of within-study (sampling) correlation $\rho$ values used for constructing variance-covariance matrix (VCV).
+
+First, set a series of $\rho$ (i.e., 0.3, 0.5, 0.7, 0.9). Note that we arbitrarily assume these values. The end-usefers can set them based on their expertise in their fields:
+
+```{r sensitivity of rho}
+# set a range of rho
+rho_range <- c(0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+# repeatedly run the specified model with varying rho
+mod_MLFE_range <- list(NULL) 
+for (i in 1:length(rho_range)) {
+# impute VCV matrix
+#VCV_range <- vcalc(vi = var.eff.size, cluster = study, obs = id.effect.within.study, rho = rho_range[i],data = dat)
+VCV_range <- impute_covariance_matrix(vi = dat$var.eff.size, cluster = dat$study, r = rho_range[i])
+# we write a function to help repeatedly run the specified model, changing rho at a time: 
+mod_MLFE_range[[i]] <- rma.mv(yi = eff.size, 
+                            V = VCV_range, # VCV matrix with varying values of rho. 
+                            method = "REML", 
+                            test = "t", 
+                            dfs = "contain",
+                            data = dat,
+                            sparse = TRUE
+                           )} # run model with different rho values.
+
+# CRVE
+mod_MLFE_RVE_range <- list(NULL)
+for (i in 1:length(mod_MLFE_range)) {
+mod_MLFE_RVE_range[i] <- robust(mod_MLFE_range[[i]], cluster = study, clubSandwich = TRUE) %>% list()  
+}
+
+```
+
+
+From **Table S1**, we see that the mean effect does not change with the changing of $\rho$ values, indicating that the model coefficients are robust to different assumption of $\rho$. 
+
+__Table S1__
+Sensitivity analysis examining the robustness of the mean effect ( to the assumption of $\rho$ values.  
+
+```{r Table S1}
+t1 <- data.frame(rho  = rho_range,
+                 "mean effect"  = sapply(mod_MLFE_RVE_range, function(x) coef(x)),
+                 "standard error" = sapply(mod_MLFE_RVE_range, function(x) x$se),
+                 "p-value" = sapply(mod_MLFE_RVE_range, function(x) x$pval),
+                 "Lower CI" = sapply(mod_MLFE_RVE_range, function(x) x$ci.lb),
+                 "Upper CI" = sapply(mod_MLFE_RVE_range, function(x) x$ci.ub))
+
+colnames(t1) <- c("Correlation (ρ)", "Mean effect", "Standard error", "p-value", "Lower CI", "Upper CI")
+dfround(t1,3) %>% DT::datatable() # kable(digits=c(1,3,3,4,3,3))
+```
+
+# License  
+
+This documented is licensed under the following license: [CC Attribution-Noncommercial-Share Alike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en).  
+
+# Software and package versions  
+
+```{r}
+sessionInfo() %>% pander()
+```
+
+# References  
+
+In this tutorial, we mainly cited literature that is related to the implementation. For other related literature, they are credited in the main text.
