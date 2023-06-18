@@ -1,7 +1,7 @@
 ---
 title: "A two-step approach for robust point and variance estimation for meta-analyses with selective reporting and dependent effect sizes"
 #subtitle: "Hands-on tutorial"
-author: "Yefeng Yang, Malgorzata Lagisz & Shinichi Nakagawa"
+author: "Yefeng Yang, Malgorzata Lagisz, Coralie Williams, Daniel W. A. Noble & Shinichi Nakagawa"
 output:
  rmdformats::downcute:
     code_folding: show
@@ -18,7 +18,7 @@ link-citations: yes
 
 This online material serves as a supplement to our methodological paper, aiming for providing a step-by-step tutorial.
 
->  Yefeng Yang, Malgorzata Lagisz, Shinichi Nakagawa. A two-step approach for robust point and variance estimation for meta-analyses with selective reporting and dependent effect sizes. Preprint. 2023 (XXXX). 
+>  Yefeng Yang, Malgorzata Lagisz, Coralie Williams, Daniel W. A. Noble & Shinichi Nakagawa. A two-step approach for robust point and variance estimation for meta-analyses with selective reporting and dependent effect sizes. Preprint. 2023. 
 
 A glimpse: 
 
