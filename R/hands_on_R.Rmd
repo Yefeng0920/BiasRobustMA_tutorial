@@ -71,7 +71,7 @@ pacman::p_load(readr,
                metafor, 
                dplyr, 
                clubSandwich,
-               #orchaRd, # forest-like plot
+               orchaRd, # forest-like plot
                here,
                ggplot2
 )
@@ -225,7 +225,7 @@ Based on Figures S4 and S5, it appears that after applying the predefined thresh
 
 In line with the publication bias test conducted in the original publication @bird2019herbivorous, our re-analysis also confirmed the existence of publication bias. We used the recently developed multilevel version of Egger's test to detect publication bias @nakagawa2022methods.
 
-```{r pubbias, fig.cap="Figure S5. The positive relaitonship between effect size estimate and its standard error indicates the evidence of publicaiton bias", warning=FALSE}
+```{r pubbias1, fig.cap="Figure S5. The positive relaitonship between effect size estimate and its standard error indicates the evidence of publicaiton bias", warning=FALSE}
 ## account for non-independence to avoid false positive when detecting publication bias
 dat$obs <- 1:nrow(dat)
 dat$se.eff.size <- sqrt(dat$var.eff.size)
@@ -242,7 +242,7 @@ The output of the model shows strong statistical evidence of publication bias, o
 
 The publication bias also can be visually checked by a contour-enhanced funnel plot, as shown in Figure S6. 
 
-```{r pubbias, fig.cap="Figure S6. Funnel plot showing the evidence of publicaiton bias", warning=FALSE}
+```{r pubbias2, fig.cap="Figure S6. Funnel plot showing the evidence of publicaiton bias", warning=FALSE}
 # a contour-enhanced funnel plot
 with(dat, funnel(eff.size, se.eff.size, yaxis = "sei", 
                  level=c(90, 95, 99), shade=c("white", "gray55", "gray75"), legend=F,
