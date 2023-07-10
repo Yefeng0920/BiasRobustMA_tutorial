@@ -57,11 +57,11 @@ After installing `R` and `posit`, next step is to install 7 packages that contai
 For packages `metafor`, `clubSandwich`,`ggplot2`, `readxl`, `dplyr`， and `here` that are archived in CRAN, use `install.packages("package name")`in the console (bottom left pane of `posit`) to install them. For example, to install `metafor`, you will need to run `install.packages("metafor")`. For package `orchaRd` that is archived in GitHub, execute `devtools::install_github("repository name/package name")`. For example, to install `orchaRd`, you will need to execute `devtools::install_github("daniel1noble/orchaRd", force = TRUE)`. 
 
 ```{r package, echo = FALSE, warning=FALSE}
-# Tidy
+# tidy
 # rm(list=ls())
 # graphics.off()
 # html outputs: https://github.com/juba/rmdformats
-# Preparing workspace
+# preparing workspace
 knitr::opts_chunk$set(echo = TRUE, include = TRUE)
 library(knitr) # knit markdown
 library(rmdformats)
@@ -77,6 +77,90 @@ pacman::p_load(readr,
 )
 # load custom function
 source(here("function","custom_function.R")) # will remove this once orchard package is ready
+
+```
+
+# Helper function
+
+```{r}
+# Simplified version of above function
+  	pub_bias_plot2 <- function(plot, fe_model, v_model = NULL, col = c("red", "blue"), plotadj = -0.05, textadj = 0.05, branch.size = 1.2, trunk.size = 3){
+		      
+		# Add check to make sure it's an intercept ONLY model being added. Message to user if not.
+		if(length(fe_model$b) > 1){
+			stop("The model you are trying to add to the plot is not an intercept only model. Please ensure you have fit an intercept only meta-analysis. See vignette for details: https://daniel1noble.github.io/orchaRd/")
+		}
+		
+		# Get the predictions from the final model and create a label for the plot
+			pub_bias_data <- get_ints_dat(fe_model, type = "yang")
+
+		if(is.null(v_model)){
+			
+			# Add to Existing Orchard Plot
+			plot + geom_pub_stats_yang(pub_bias_data, plotadj = plotadj, textadj = textadj, branch.size = branch.size, trunk.size = trunk.size) 
+		
+		} else{
+			# Extract the corrected meta-analytic mean and CI
+			pub_bias_data2 <- get_ints_dat(v_model, type = "naka")
+
+			plot + geom_pub_stats_yang(pub_bias_data, plotadj = plotadj, textadj = textadj, branch.size = branch.size, trunk.size = trunk.size) + geom_pub_stats_naka(pub_bias_data2, plotadj = plotadj, textadj = textadj, branch.size = branch.size, trunk.size = trunk.size) 
+		}		
+	}
+
+#' @title geom_pub_stats_yang
+#' @description This function adds a corrected meta-analytic mean, sensu Yang et al. 2023, confidence interval and text annotation to an intercept only orchard plot.
+#' @param data The data frame containing the corrected meta-analytic mean and confidence intervals.
+#' @param col The colour of the mean and confidence intervals.
+#' @param plotadj The adjustment to the x-axis position of the mean and confidence intervals.
+#' @param textadj The adjustment to the y-axis position of the mean and confidence intervals for the text displaying the type of correction.
+#' @param branch.size Size of the confidence intervals.
+#' @param trunk.size Size of the mean, or central point.
+	geom_pub_stats_yang <-  function(data, col = "red", plotadj = -0.05, textadj = 0.05, branch.size = 1.2, trunk.size = 3){
+		list(ggplot2::geom_point(data = data[[1]], ggplot2::aes(x = name, y = pred), color = col, shape = "diamond", position = position_nudge(plotadj), size = trunk.size), 
+				ggplot2::geom_linerange(data = data[[1]], ggplot2::aes(x = name, ymin = ci.lb, ymax = ci.ub), color = col, position = position_nudge(plotadj), size = branch.size),
+					ggplot2::annotate("text", x = 1+plotadj-textadj, y = data[[1]]$pred+textadj, label = data[[2]], color = col, size = 4, hjust = data[[1]]$ci.ub -0.2)	
+		)
+	}
+
+#' @title geom_pub_stats_naka
+#' @description This function adds a corrected meta-analytic mean, sensu Nakagawa et al. 2022, confidence interval and text annotation to an intercept only orchard plot.
+#' @param data The data frame containing the corrected meta-analytic mean and confidence intervals.
+#' @param col The colour of the mean and confidence intervals.
+#' @param plotadj The adjustment to the x-axis position of the mean and confidence intervals.
+#' @param textadj The adjustment to the y-axis position of the mean and confidence intervals for the text displaying the type of correction.
+#' @param branch.size Size of the confidence intervals.
+#' @param trunk.size Size of the mean, or central point.
+	geom_pub_stats_naka <- function(data, col = "blue", plotadj = -0.05, textadj = 0.05, branch.size = 1.2, trunk.size = 3) {
+					list(ggplot2::geom_point(data = data[[1]], ggplot2::aes(x = name, y = pred), color = col, shape = "diamond", position = position_nudge(abs(plotadj)), size = trunk.size), 
+					ggplot2::geom_linerange(data = data[[1]], ggplot2::aes(x = name, ymin = ci.lb, ymax = ci.ub), color = col, position = position_nudge(abs(plotadj)), size = branch.size), 
+					ggplot2::annotate("text", x = 1+abs(plotadj)+textadj, y = data[[1]]$pred-textadj, label = data[[2]], color = col, size = 4, hjust = data[[1]]$ci.ub +0.2))
+	}
+
+#' @title get_ints_dat
+#' @description This function extracts the corrected meta-analytic mean and confidence intervals from a model object.
+#' @param model The rma model object containing the corrected meta-analytic mean and confidence intervals.
+#' @param type The type of correction to extract the corrected meta-analytic mean and confidence intervals from. "yang" for Yang et al. 2023, "naka" for Nakagawa et al. 2023.
+#' @return A list containing the corrected meta-analytic mean and confidence intervals, and a label for the plot.
+	get_ints_dat <- function(model, type = c("naka", "yang")){
+			# Extract the corrected meta-analytic mean and CI
+				type = match.arg(type)
+				
+				dat <- data.frame(name  =  "Intrcpt", 
+								pred = model$b["intrcpt",], 
+								ci.lb = model$ci.lb[1], 
+								ci.ub = model$ci.ub[1])
+				if(type == "naka"){
+				lab <- paste0("Bias Corrected Estimate: ", round(dat$pred, 2), 
+									", 95% CI [", round(dat$ci.lb, 2), ",", round(dat$ci.ub, 2), "]")
+				}
+
+				if(type == "yang"){
+				lab <- paste0("Bias Robust Estimate: ", round(dat$pred, 2), 
+									", 95% CI [", round(dat$ci.lb, 2), ",", round(dat$ci.ub, 2), "]")
+	}
+
+	return(list(dat, lab))
+	}
 ```
 
 
@@ -133,7 +217,6 @@ hist(dat$eff.size, breaks = 50, main = "Effect size distribution", xlab = "Effec
 
 ```{r outliner2, fig.cap="Figure S4. Histogram of effect size measures after deleting potential outliners", warning=FALSE}
 plot(dat$eff.size, 1/sqrt(dat$var.eff.size), main = "Effect size vs precision", xlab = "Effect size estimate (SMD)", ylab = "Precision (1/SE)")
-
 ```
 
 Based on Figures S4 and S5, it appears that after applying the predefined threshold to exclude potential outliers, the data exhibits a more normal distribution. It is important to note that this tutorial does not specifically focus on data cleaning techniques (we acknowledge we are also not the expert in this aspect). Therefore, we will not delve into this aspect and proceed with our demonstration after the above simple cleaning.
@@ -156,6 +239,16 @@ bubble_plot(mod_pb, mod = "se.eff.size", legend.pos = "top.left", group = "study
 ```
 
 The output of the model shows strong statistical evidence of publication bias, or more precisely, small study effects. This is also confirmed by Figure S6. It is worth noting, however, that as we state in the main text, we assume, as do other researchers, that the small study effect is a typical form of selective reporting or publication bias. But whether this is the case, only God knows.
+
+The publication bias also can be visually checked by a contour-enhanced funnel plot, as shown in Figure S6. 
+
+```{r pubbias, fig.cap="Figure S6. Funnel plot showing the evidence of publicaiton bias", warning=FALSE}
+# a contour-enhanced funnel plot
+with(dat, funnel(eff.size, se.eff.size, yaxis = "sei", 
+                 level=c(90, 95, 99), shade=c("white", "gray55", "gray75"), legend=F,
+                 xlab = "Standardized mean difference (SMD)", ylab = "SE"))
+```
+
 
 # Benchmark method: multilevel model
 
@@ -181,16 +274,18 @@ In contrast, our proposed two-step approach address this issue by employing bias
 
 In the first step, we employ bias-robust models with bias-robust weighting schemes to obtain less biased mean effect size estimates $\hat{\beta}$. Specifically, we incorporate a within-study variance-covariance matrix into the fixed-effect model (FE + VCV) and utilize the unrestricted weighted least square (UWLS) model. The bias-robust weighting schemes counteracted selective reporting by considering the underlying mechanisms that contribute to it. For example, the inverse VCV weighting scheme assigned smaller weights to studies with low precision and large effects, thereby penalizing studies that appear to be “selectively reported”. 
 
-To implement step one, you will need to use two functions, `impute_covariance_matrix()` from package `clubSandwich` @pustejovsky2022meta and `rma.mv` from package `metafor` @viechtbauer2007confidence. We assume a constant sampling correlation of 0.5 (see a sensitivity analysis at the end of this tutorial). Note that `impute_covariance_matrix()` also can be replaced by `vcalc()` in `metafor`.
+To implement step one, you will need to use `vcalc()` and `rma.mv` from package `metafor` @viechtbauer2007confidence. We assume a constant sampling correlation of 0.5 (see a sensitivity analysis at the end of this tutorial). Note that  `vcalc()` in `metafor` also can be replaced by `impute_covariance_matrix()` from package `clubSandwich` @pustejovsky2022meta.
 
 Let's show the implementation of step one:
 
 ```{r step one, warning=FALSE}
 # step one - fit a multivariate FE model
 ## assuming that the effect sizes within studies are correlated with rho=0.5
-VCV <- impute_covariance_matrix(vi = dat$var.eff.size, cluster = dat$study, r = 0.5)
-mod_MLFE <- rma.mv(yi = eff.size, V = VCV, method = "REML", test = "t", dfs = "contain", data = dat)
+VCV <- vcalc(vi = var.eff.size, cluster = study, rho = 0.5, obs = obs, data = dat) 
+## alternative way
+# VCV <- impute_covariance_matrix(vi = dat$var.eff.size, cluster = dat$study, r = 0.5)
 
+mod_MLFE <- rma.mv(yi = eff.size, V = VCV, method = "REML", test = "t", dfs = "contain", data = dat)
 summary(mod_MLFE)
 ```
 
@@ -204,36 +299,41 @@ The robust standard error estimate ${SE(\hat{\beta})}$ and subsequent statistica
 
 ```{r step two, warning=FALSE}
 # apply CRVE to multivariate FE model
-mod_MLFE_RVE <- robust(mod_MLFE, cluster = study, clubSandwich = TRUE)
+mod_MLFE_RVE <- robust(mod_MLFE, cluster = study, adjust = TRUE, clubSandwich = TRUE)
 summary(mod_MLFE_RVE)
 ```
 
 The corresponding ${SE(\hat{\beta})}$ now is `r round(mod_MLFE_RVE$se[1],3)`, which is more closer to that from the standard method (MLMA model). The null-hypothesis test shows that the interaction between herbivores is not statistically significant (p-value = `r round(mod_MLFE_RVE$pval[1],3)`). The 95% CI becomes wider [`r round(mod_MLFE_RVE$ci.lb[1],3)`, `r round(mod_MLFE_RVE$ci.ub[1],3)`], which means it is more likely to cover the true effect and less likely to have a high false positive. Another interesting point to spot is that the degrees of freedom was decreased from `r mod_MLFE$ddf[1]` to `r round(mod_MLFE_RVE$ddf[1],0)`. Using a more familiar language to explain this is that the dataset has the issue of pseudo-replication. 
 
+*Technical note:*
+In terms of small sample size correction for CRVE, CR2 correction performs better than CR1. However, CR2 is not applicable to models with non-nested random effects, such as models with crossed random effects. In our case, the model in the first step does not include random effects.
 
 # Visualization
 
 We also develop a help function integrated into a meta-analysis visualization package `orchaRd` @nakagawa2021orchard to visualize the results of the proposed method along with those from the standard method. The plot includes essential elements such as the point estimate of the mean effect size, 95% CI, 95% prediction interval, as well as information on precision, observational and study-level sample sizes, allowing for a visual assessment of the robustness of the meta-analytic findings and facilitating transparent reporting.
 
-This figure can be made with `orchard_plot()` function:
+This figure can be made with `orchard_plot()` and `pub_bias_plot()` functions:
 
-```{r orchard, fig.cap="Figure S6. Orchard plot showing the results from the standard meta-analytic modeeling (multilevel meta-analysis) and the proposed two-step appraoch", warning=FALSE}
-# extract estimates from the fitted model
-mod_tab <- data.frame(name = "Intrcpt", estimate = mod_MLFE_RVE$b[1], lowerCL = mod_MLFE_RVE$ci.lb, upperCL = mod_MLFE_RVE$ci.ub, y = min(dat$eff.size))
+```{r orchard, fig.cap="Figure S7. Orchard plot showing the results from the standard meta-analytic modeeling (multilevel meta-analysis) and the proposed two-step appraoch", warning=FALSE}
 
-orchard_plot(mod_MLMA, mod = "1", group = "study", xlab = "Standardised mean difference (SMD)") + 
-  scale_x_discrete(labels = "Mean effect estimate") + 
-  ylim(-4,4) + 
-  #geom_hline(yintercept = mod_MLFE_RVE$b[1], linetype = 1, colour = "red", alpha = 0.3) +
-  geom_hline(yintercept = mod_MLFE_RVE$ci.lb[1], linetype = 2, colour = "red", alpha = 0.5) + 
-  geom_hline(yintercept = mod_MLFE_RVE$ci.ub, linetype = 2, colour = "red", alpha = 0.5) +
+# typical orchard plot
+plot <- orchard_plot(mod_MLMA, mod = "1", group = "study", xlab = "Standardised mean difference (SMD)") + 
+  scale_x_discrete(labels = "Population mean effect estimate") + ylim(-4,4)
+
+# visualize the model estimates of the proposed two-step approach and publication bias-corrected method as the sensitivity analyses
+pub_bias_plot(plot, mod_MLFE_RVE, mod_pb) +
   theme(panel.grid = element_blank(),
-        axis.text.x = element_text(size = 14, color = "black"),
-        axis.title.x = element_text(size = 14, color = "black"),
-        axis.text.y = element_text(size = 14, color = "black"))
-  #annotate("errorbar", x = mod_tab$name, y = 2, ymin = mod_tab$lowerCL, ymax = mod_tab$upperCL, color = "red", width = 0.05) +
-```
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"))
 
+
+# not run - fig used in the panel C in figure 6
+png(filename = "Fig.6 panel4.png", width = 8, height = 3, units = "in", type = "windows", res = 400)
+pub_bias_plot2(plot, mod_MLFE_RVE, mod_pb) + theme(panel.grid = element_blank(), axis.text.x = element_text(size = 12, color = "black"), axis.title.x = element_text(size = 12, color = "black"), axis.text.y = element_text(size = 12, color = "black"))
+dev.off()
+
+```
 
 # Additional analysis
 
