@@ -213,11 +213,11 @@ source(here("function","custom_function.R")) # will remove this once orchard pac
 In the tutorial, we randomly selected a published meta-analysis
 @bird2019herbivorous that showed evidence of publication bias. This
 example meta-analysis examined the effect of herbivore interaction on
-fitness based on 179 species, 167 studies, and 1640 effect sizes 55. To
-address the statistical dependence among effect sizes (with 10 effect
-sizes per study), the original publication employed Bayesian multilevel
-meta-analytic modelling with phylogenetic relatedness, study, and
-observation identities as random effects.
+fitness based on 179 species, 167 studies, and 1640 effect sizes
+@bird2019herbivorous. To address the statistical dependence among effect
+sizes (with 10 effect sizes per study), the original publication
+employed Bayesian multilevel meta-analytic modelling with phylogenetic
+relatedness, study, and observation identities as random effects.
 
 First, let's load data and have a glance of data.
 
