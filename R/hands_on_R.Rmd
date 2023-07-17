@@ -25,7 +25,7 @@ aiming for providing a step-by-step tutorial.
 > Yefeng Yang, Malgorzata Lagisz, Coralie Williams, Daniel W. A. Noble &
 > Shinichi Nakagawa. A two-step approach for robust point and variance
 > estimation for meta-analyses with selective reporting and dependent
-> effect sizes. Preprint. 2023.
+> effect sizes.2023.
 
 A glimpse:
 
