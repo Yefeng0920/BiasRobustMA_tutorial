@@ -6,7 +6,7 @@ The authors affirm that the manuscript is an honest, accurate, and transparent a
 
 ## Structure
 
-The repository contains 5 folders:
+The repository contains 3 folders:
 
 - `R`
 
