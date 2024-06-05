@@ -2,7 +2,7 @@
 
 
 # Transparency and Openness
-The authors affirm that the manuscript is an honest, accurate, and transparent account of the study being reported, and no important aspects of the study have been omitted. Data, materials, and code are available in this GitHub repository.
+The authors affirm that the manuscript is an honest, accurate, and transparent account of the study being reported, and no important aspects of the study have been omitted. Data, materials, and code are available in this GitHub repository. The present research was not preregistered.
 
 ## Structure
 
