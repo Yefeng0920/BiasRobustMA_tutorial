@@ -19,7 +19,7 @@ The repository contains 3 folders:
 
 `hands_on_R.Rmd`: a step-by-step tutorial containing `R` scripts in the format of `.Rmd`.
 
-`hands_on_R.html`: a step-by-step tutorial containing `R` scripts in a more interactive format.
+`hands_on_R.html`: a step-by-step tutorial containing `R` scripts and interactive results in a more interactive format.
 
 
   
